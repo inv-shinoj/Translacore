@@ -6,6 +6,29 @@ from .enums import ProjectStatus
 from .validators import validate_project_data
 
 
+class ProjectListSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    form_type_name = serializers.CharField(
+        source="form_schema.form_type.name", read_only=True
+    )
+    created_by_name = serializers.CharField(
+        source="created_by.full_name", read_only=True
+    )
+
+    class Meta:
+        model = Project
+        fields = (
+            "id",
+            "name",
+            "status",
+            "status_display",
+            "form_type_name",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        )
+
+
 class ProjectCreateSerializer(serializers.ModelSerializer):
     form_type = serializers.IntegerField(write_only=True)
 
