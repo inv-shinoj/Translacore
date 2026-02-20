@@ -62,7 +62,8 @@ class GoogleLoginView(APIView):
 
         try:
             payload = verify_google_token(serializer.validated_data["id_token"])
-        except Exception:
+        except Exception as e:
+            print(f"[GoogleLogin] Token verification failed: {e}")
             return Response(
                 {"detail": "Invalid Google token"},
                 status=status.HTTP_401_UNAUTHORIZED
