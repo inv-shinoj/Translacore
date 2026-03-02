@@ -36,7 +36,6 @@ class FormSchemaCreateSerializer(serializers.ModelSerializer):
             "name",
             "schema_json",
             "schema_file",
-            "version",
             "status",
         )
         extra_kwargs = {

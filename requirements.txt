@@ -6,6 +6,8 @@ charset-normalizer==3.4.4
 cryptography==46.0.5
 Django==5.2.11
 djangorestframework==3.16.1
+django-cors-headers
+requests==2.32.5
 djangorestframework_simplejwt==5.5.1
 google==3.0.0
 google-auth==2.48.0
