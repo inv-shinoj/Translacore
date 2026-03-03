@@ -8,13 +8,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
 
 from .serializers import (
-    EmailLoginSerializer, 
-    GoogleLoginSerializer, 
+    EmailLoginSerializer,
+    GoogleLoginSerializer,
     RegisterSerializer,
-    LogoutSerializer)
+    LogoutSerializer,
+    UserListSerializer,
+)
 from .utils.jwt import generate_tokens
 from .utils.google import verify_google_token
-from .enums import AuthProvider
+from .enums import AuthProvider, UserRole
 
 
 class EmailLoginView(APIView):
@@ -141,4 +143,17 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
-    
+
+
+class UserListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        users = User.objects.filter(is_active=True).exclude(id=request.user.id)
+        serializer = UserListSerializer(users, many=True)
+        return Response(serializer.data)
