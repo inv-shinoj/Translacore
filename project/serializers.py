@@ -1,10 +1,9 @@
 from rest_framework import serializers
 from forms.models import FormSchema
 from forms.enums import SchemaStatus
-from .models import Project, ProjectMember
+from .models import Project
 from .enums import ProjectStatus
 from .validators import validate_project_data
-from accounts.models import User
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
@@ -70,24 +69,3 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         )
 
         return project
-
-
-class ProjectMemberReadSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source="user.full_name", read_only=True)
-    email = serializers.CharField(source="user.email", read_only=True)
-    role_display = serializers.CharField(source="get_role_display", read_only=True)
-
-    class Meta:
-        model = ProjectMember
-        fields = ("id", "full_name", "email", "role", "role_display", "assigned_at")
-
-
-class AddMemberSerializer(serializers.Serializer):
-    user_id = serializers.UUIDField()
-    role = serializers.ChoiceField(choices=[(2, "Lead"), (3, "Employee")])
-
-    def validate_user_id(self, value):
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist:
-            raise serializers.ValidationError("User not found.")

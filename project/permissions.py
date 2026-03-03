@@ -7,21 +7,12 @@ class CanCreateProject(BasePermission):
         return request.user.role in [
             UserRole.ADMIN,
             UserRole.MANAGER,
+            UserRole.LEAD
         ]
-
-
+    
 class CanListAllProject(BasePermission):
     def has_permission(self, request, view):
         return request.user.role in [
             UserRole.ADMIN,
+
         ]
-
-
-class CanAccessProject(BasePermission):
-    """Read-only access for Admin and Manager; full access for Admin only."""
-    def has_permission(self, request, view):
-        if request.user.role == UserRole.ADMIN:
-            return True
-        if request.user.role == UserRole.MANAGER:
-            return view.action in ("list", "retrieve", "members")
-        return False
