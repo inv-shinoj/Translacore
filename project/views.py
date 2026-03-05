@@ -8,16 +8,22 @@ from .models import Project, ProjectMember
 from .serializers import (
     ProjectCreateSerializer,
     ProjectListSerializer,
+    ProjectDetailSerializer,
     ProjectMemberReadSerializer,
     AddMemberSerializer,
 )
 from .permissions import CanCreateProject, CanListAllProject, CanAccessProject
+from accounts.enums import UserRole
 
 
 class ProjectViewSet(ModelViewSet):
-    queryset = Project.objects.select_related(
-        "form_schema__form_type", "created_by"
-    ).all()
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Project.objects.select_related("form_schema__form_type", "created_by")
+        if user.role in [UserRole.LEAD, UserRole.EMPLOYEE]:
+            return qs.filter(projectmember__user=user)
+        return qs.all()
 
     def get_permissions(self):
         if self.action == "create":
@@ -29,6 +35,8 @@ class ProjectViewSet(ModelViewSet):
     def get_serializer_class(self):
         if self.action in ("create", "update", "partial_update"):
             return ProjectCreateSerializer
+        if self.action == "retrieve":
+            return ProjectDetailSerializer
         return ProjectListSerializer
 
     @action(detail=True, methods=["get", "post"], url_path="members")
