@@ -2,22 +2,22 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import FormType, FormSchema
+from .models import FormType, FormSchema,SchemaStatus
 from .serializers import FormTypeSerializer, FormSchemaCreateSerializer
 from .permissions import IsAdmin
-from .enums import SchemaStatus
+from .permissions import IsAdminOrReadOnlyForStaff
 
 
 class FormTypeViewSet(ModelViewSet):
     queryset = FormType.objects.all()
     serializer_class = FormTypeSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminOrReadOnlyForStaff]
 
 
 class FormSchemaViewSet(ModelViewSet):
     queryset = FormSchema.objects.select_related("form_type")
     serializer_class = FormSchemaCreateSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminOrReadOnlyForStaff]
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
