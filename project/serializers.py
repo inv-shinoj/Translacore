@@ -15,6 +15,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(
         source="created_by.full_name", read_only=True
     )
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -25,9 +26,34 @@ class ProjectListSerializer(serializers.ModelSerializer):
             "status_display",
             "form_type_name",
             "created_by_name",
+            "my_role",
             "created_at",
             "updated_at",
         )
+
+    def get_my_role(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return None
+        member = obj.projectmember_set.filter(user=request.user).first()
+        return member.get_role_display() if member else None
+
+
+class ProjectDetailSerializer(ProjectListSerializer):
+    """Extends list serializer with project_data and schema field definitions."""
+    schema_fields = serializers.SerializerMethodField()
+
+    class Meta(ProjectListSerializer.Meta):
+        fields = ProjectListSerializer.Meta.fields + (
+            "project_data",
+            "schema_fields",
+        )
+
+    def get_schema_fields(self, obj):
+        try:
+            return obj.form_schema.schema_json.get("fields", [])
+        except Exception:
+            return []
 
 
 class ProjectCreateSerializer(serializers.ModelSerializer):

@@ -23,5 +23,5 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("api/forms/", include("forms.urls")),
     path("api/project/", include("project.urls")),
-
+    path("api/project/<uuid:project_id>/documents/", include("documents.urls")),
 ]
