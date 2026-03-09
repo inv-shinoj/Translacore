@@ -11,6 +11,7 @@ from .serializers import (
     ProjectDetailSerializer,
     ProjectMemberReadSerializer,
     AddMemberSerializer,
+    UpdateMemberRoleSerializer,
 )
 from .permissions import CanCreateProject, CanListAllProject, CanAccessProject
 from accounts.enums import UserRole
@@ -28,7 +29,7 @@ class ProjectViewSet(ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             return [IsAuthenticated(), CanCreateProject()]
-        if self.action == "members":
+        if self.action in ("members", "remove_member", "update_member_role"):
             return [IsAuthenticated(), CanCreateProject()]
         return [IsAuthenticated(), CanAccessProject()]
 
@@ -69,3 +70,38 @@ class ProjectViewSet(ModelViewSet):
             ProjectMemberReadSerializer(member).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["delete"], url_path=r"members/(?P<member_id>[^/.]+)")
+    def remove_member(self, request, pk=None, member_id=None):
+        project = self.get_object()
+
+        try:
+            member = ProjectMember.objects.get(project=project, id=member_id)
+        except ProjectMember.DoesNotExist:
+            return Response(
+                {"detail": "Member not found in this project."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        member.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["patch"], url_path=r"members/(?P<member_id>[^/.]+)/role")
+    def update_member_role(self, request, pk=None, member_id=None):
+        project = self.get_object()
+
+        try:
+            member = ProjectMember.objects.select_related("user").get(project=project, id=member_id)
+        except ProjectMember.DoesNotExist:
+            return Response(
+                {"detail": "Member not found in this project."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = UpdateMemberRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        member.role = serializer.validated_data["role"]
+        member.save(update_fields=["role"])
+
+        return Response(ProjectMemberReadSerializer(member).data, status=status.HTTP_200_OK)

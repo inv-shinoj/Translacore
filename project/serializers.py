@@ -117,3 +117,7 @@ class AddMemberSerializer(serializers.Serializer):
             return User.objects.get(id=value, is_active=True)
         except User.DoesNotExist:
             raise serializers.ValidationError("User not found.")
+
+
+class UpdateMemberRoleSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=[(2, "Lead"), (3, "Employee")])
