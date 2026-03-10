@@ -5,6 +5,7 @@ from .models import Project, ProjectMember
 from .enums import ProjectStatus
 from .validators import validate_project_data
 from accounts.models import User
+from documents.enums import DocumentStatus
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
@@ -96,6 +97,89 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         )
 
         return project
+
+
+class ProjectUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
+        fields = ("name", "project_data", "status")
+        extra_kwargs = {
+            "name": {"required": False},
+            "project_data": {"required": False},
+            "status": {"required": False},
+        }
+
+    def validate_name(self, value):
+        if not value or not str(value).strip():
+            raise serializers.ValidationError("Project name cannot be empty.")
+        return value.strip()
+
+    def _validate_status_transition(self, current_status, next_status, project):
+        if current_status == next_status:
+            return
+
+        allowed_transitions = {
+            ProjectStatus.DRAFT: {ProjectStatus.ACTIVE, ProjectStatus.ARCHIVED},
+            ProjectStatus.ACTIVE: {ProjectStatus.COMPLETED, ProjectStatus.ARCHIVED},
+            ProjectStatus.COMPLETED: {ProjectStatus.ARCHIVED},
+            ProjectStatus.ARCHIVED: set(),
+        }
+
+        if next_status not in allowed_transitions.get(current_status, set()):
+            raise serializers.ValidationError(
+                {
+                    "status": (
+                        f"Invalid status transition from '{ProjectStatus(current_status).label}' "
+                        f"to '{ProjectStatus(next_status).label}'."
+                    )
+                }
+            )
+
+        if next_status == ProjectStatus.COMPLETED:
+            docs = project.documents.all()
+            if not docs.exists():
+                raise serializers.ValidationError(
+                    {"status": "Project must have at least one document before marking as Completed."}
+                )
+
+            has_non_completed = docs.exclude(status=DocumentStatus.COMPLETED).exists()
+            if has_non_completed:
+                raise serializers.ValidationError(
+                    {"status": "All project documents must be Completed before completing the project."}
+                )
+
+        if next_status == ProjectStatus.ARCHIVED:
+            has_translating = project.documents.filter(status=DocumentStatus.TRANSLATING).exists()
+            if has_translating:
+                raise serializers.ValidationError(
+                    {"status": "Cannot archive while documents are still Translating."}
+                )
+
+    def validate(self, attrs):
+        project = self.instance
+
+        if not project:
+            return attrs
+
+        if project.status in (ProjectStatus.COMPLETED, ProjectStatus.ARCHIVED):
+            has_content_edits = "name" in attrs or "project_data" in attrs
+            if has_content_edits:
+                raise serializers.ValidationError(
+                    {
+                        "detail": (
+                            "Completed or Archived projects are read-only. "
+                            "Only allowed status transitions can be applied."
+                        )
+                    }
+                )
+
+        merged_project_data = attrs.get("project_data", project.project_data)
+        validate_project_data(project.form_schema.schema_json, merged_project_data)
+
+        if "status" in attrs:
+            self._validate_status_transition(project.status, attrs["status"], project)
+
+        return attrs
 
 
 class ProjectMemberReadSerializer(serializers.ModelSerializer):

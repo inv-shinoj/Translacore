@@ -7,6 +7,7 @@ from rest_framework import status
 from .models import Project, ProjectMember
 from .serializers import (
     ProjectCreateSerializer,
+    ProjectUpdateSerializer,
     ProjectListSerializer,
     ProjectDetailSerializer,
     ProjectMemberReadSerializer,
@@ -34,11 +35,23 @@ class ProjectViewSet(ModelViewSet):
         return [IsAuthenticated(), CanAccessProject()]
 
     def get_serializer_class(self):
-        if self.action in ("create", "update", "partial_update"):
+        if self.action == "create":
             return ProjectCreateSerializer
+        if self.action in ("update", "partial_update"):
+            return ProjectUpdateSerializer
         if self.action == "retrieve":
             return ProjectDetailSerializer
         return ProjectListSerializer
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        output = ProjectListSerializer(instance, context={"request": request})
+        return Response(output.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get", "post"], url_path="members")
     def members(self, request, pk=None):
