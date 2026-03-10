@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import DocumentListCreateView, DocumentDetailView, DocumentDownloadView
+from .views import DocumentListCreateView, DocumentDetailView, DocumentDownloadView, DocumentRetryView
 
 urlpatterns = [
     path(
@@ -16,5 +16,10 @@ urlpatterns = [
         "<uuid:doc_id>/download/<str:file_kind>/",
         DocumentDownloadView.as_view(),
         name="document-download",
+    ),
+    path(
+        "<uuid:doc_id>/retry/",
+        DocumentRetryView.as_view(),
+        name="document-retry",
     ),
 ]

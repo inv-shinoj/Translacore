@@ -20,7 +20,8 @@ FILE_EXTENSION_MAP = {
     ".pdf": FileType.PDF,
     ".docx": FileType.DOCX,
     ".xlsx": FileType.XLSX,
+    ".csv": FileType.XLSX,  
 }
 
 ALLOWED_EXTENSIONS = set(FILE_EXTENSION_MAP.keys())
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  

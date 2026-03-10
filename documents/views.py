@@ -186,6 +186,120 @@ class DocumentDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class DocumentRetryView(APIView):
+    """
+    POST — retry translation for a Failed document whose source file is already on S3.
+    Conditions: status == FAILED and source_s3_key is set.
+    """
+
+    def get_permissions(self):
+        return [IsAuthenticated(), CanAccessProjectDocuments()]
+
+    def post(self, request, project_id, doc_id):
+        doc = get_object_or_404(Document, id=doc_id, project_id=project_id)
+
+        # Guard: only retry Failed documents
+        if doc.status != DocumentStatus.FAILED:
+            return Response(
+                {"detail": "Only documents with 'Failed' status can be retried."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Guard: source must be on S3 to retry translation
+        if not doc.source_s3_key:
+            return Response(
+                {"detail": "Source file was never uploaded to storage. Please re-upload the document."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 1. Re-download source file from S3
+        try:
+            file_bytes = storage.download_file(doc.source_s3_key)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Failed to retrieve source file from storage: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # 2. Re-parse text
+        try:
+            extracted_text = parse_file(file_bytes, doc.file_type)
+        except Exception as exc:
+            doc.error_message = f"File parsing failed on retry: {exc}"
+            doc.save(update_fields=["error_message"])
+            return Response(
+                {"detail": f"Failed to parse source file: {exc}"},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        # 3. Translate
+        doc.status = DocumentStatus.TRANSLATING
+        doc.error_message = ""
+        doc.save(update_fields=["status", "error_message"])
+
+        translator = get_translator()
+        start_time = time.time()
+        try:
+            translated_text = translator.translate(
+                extracted_text,
+                source_lang=doc.source_language,
+                target_lang=doc.target_language,
+            )
+            duration_ms = int((time.time() - start_time) * 1000)
+        except Exception as exc:
+            doc.status = DocumentStatus.FAILED
+            doc.error_message = f"Translation failed on retry: {exc}"
+            doc.save(update_fields=["status", "error_message"])
+            return Response(
+                DocumentDetailSerializer(doc).data,
+                status=status.HTTP_200_OK,
+            )
+
+        # 4. Generate output file
+        try:
+            translated_bytes, translated_content_type = generate_translated_file(
+                translated_text, doc.file_type, doc.original_filename
+            )
+        except Exception as exc:
+            doc.status = DocumentStatus.FAILED
+            doc.error_message = f"Output file generation failed on retry: {exc}"
+            doc.save(update_fields=["status", "error_message"])
+            return Response(
+                DocumentDetailSerializer(doc).data,
+                status=status.HTTP_200_OK,
+            )
+
+        # 5. Upload translated file to S3
+        translated_filename = f"translated_{doc.original_filename}"
+        translated_key = storage.build_translated_key(
+            str(project_id), str(doc.id), translated_filename
+        )
+        try:
+            storage.upload_bytes(translated_bytes, translated_key, translated_content_type)
+            doc.translated_s3_key = translated_key
+            doc.status = DocumentStatus.COMPLETED
+            doc.error_message = ""
+            doc.save(update_fields=["translated_s3_key", "status", "error_message"])
+        except Exception as exc:
+            doc.status = DocumentStatus.FAILED
+            doc.error_message = f"Translated file S3 upload failed on retry: {exc}"
+            doc.save(update_fields=["status", "error_message"])
+            return Response(
+                DocumentDetailSerializer(doc).data,
+                status=status.HTTP_200_OK,
+            )
+
+        # 6. Log
+        TranslationLog.objects.create(
+            document=doc,
+            engine_used=translator.engine_name,
+            char_count=len(extracted_text),
+            duration_ms=duration_ms,
+        )
+
+        return Response(DocumentDetailSerializer(doc).data, status=status.HTTP_200_OK)
+
+
 class DocumentDownloadView(APIView):
     """
     GET — redirect to a presigned S3 URL for source or translated file.

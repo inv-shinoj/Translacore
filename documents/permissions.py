@@ -30,7 +30,22 @@ class CanAccessProjectDocuments(BasePermission):
 
 
 class CanDeleteDocument(BasePermission):
-    """Only Admin or Manager can delete documents."""
+    """Admin/Manager or project Lead member can delete documents."""
 
     def has_permission(self, request, view):
-        return request.user.role in (UserRole.ADMIN, UserRole.MANAGER)
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.role in (UserRole.ADMIN, UserRole.MANAGER):
+            return True
+
+        project_id = view.kwargs.get("project_id")
+        if not project_id:
+            return False
+
+        return ProjectMember.objects.filter(
+            project_id=project_id,
+            user=user,
+            role=2,
+        ).exists()
